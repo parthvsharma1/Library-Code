@@ -10,32 +10,35 @@ import java.util.Map;
 
 public class XMLtoClasses extends ClassPathXmlApplicationContext {
     public static Map<String, String> idToClassMap;
+    public static ArrayList<Class<?>> primaryClasses;
 
-
-    public ArrayList<String> getAllClassesfromXml(String[] configLocations)  {
+    public ArrayList<String> getAllClassesfromXml(String[] configLocations) throws ClassNotFoundException {
 
         idToClassMap=new HashMap<>();
+        primaryClasses=new ArrayList<>();
+
         ArrayList<String> beans=new ArrayList<>();
         this.setConfigLocations(configLocations);
-
-        this.prepareRefresh();
-
         ConfigurableListableBeanFactory beanFactory = this.obtainFreshBeanFactory();
 
-        prepareBeanFactory(beanFactory);
 
-//        System.out.println("bean factory names size " + this.getBeanDefinitionNames().length);
         String[] beanNames=this.getBeanDefinitionNames();
+
         for(String itr:beanNames)
         {
             BeanDefinition bd=beanFactory.getBeanDefinition(itr);
-//            System.out.println(itr+" -> "+bd.getBeanClassName());
-            beans.add(bd.getBeanClassName());
+            String className=bd.getBeanClassName();
+            beans.add(className);
             idToClassMap.put(itr,bd.getBeanClassName());
-        }
-        destroyBeans();
 
-        resetCommonCaches();
+            Class<?> thisClass = Class.forName(className);
+            if(bd.isPrimary())
+                primaryClasses.add(thisClass);
+        }
+//
+//        destroyBeans();
+//
+//        resetCommonCaches();
 
         return beans;
     }

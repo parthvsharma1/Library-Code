@@ -18,34 +18,39 @@ import java.util.*;
 
 import static com.spr.XMLtoClasses.*;
 
-public class findCyclicDependency {
+public class FindCyclicDependency {
 
-//    static String[] configs =new String[] {"ApplicationContext.xml"};
+    static String[] configs =new String[] {"ApplicationContext.xml"};
     public static Map<String,Set<String>> edges;
     public static Map<String,Set<String>> edges2;
     private static String loop="";
     private static String baseElement="";
 
     public static void main(String[] args) throws Exception {
-        Commit currCommit= RunShellCommandFromJava.getCurrCommit();
 
-        try {
 
-            ArrayList<Commit> commitHistory = RunShellCommandFromJava.getGitCommits();
-            String firstFaultyCommit = "";
-            String firstGoodCommit = "";
+//        Commit currCommit= RunShellCommandFromJava.getCurrCommit();
 
-            for (Commit commit : commitHistory) {
-                String command = "git checkout -f " + commit.getId();
-                Process proc = Runtime.getRuntime().exec(command);
-                proc.waitFor();
+//        try {
+
+//            ArrayList<Commit> commitHistory = RunShellCommandFromJava.getGitCommits();
+//            String firstFaultyCommit = "";
+//            String firstGoodCommit = "";
+//
+//            for (Commit commit : commitHistory) {
+//                String command = "git checkout -f " + commit.getId();
+//                Process proc = Runtime.getRuntime().exec(command);
+//                proc.waitFor();
 
                 System.out.println("------------------------------------------------------------------");
 
 
-                ArrayList<String> allClasses;
+
                 XMLtoClasses xmLtoClasses = new XMLtoClasses();
-                allClasses = xmLtoClasses.getAllClassesfromXml(new String[]{"ApplicationContext.xml"});  // get classes from XMLS
+                ArrayList<String> allClasses = xmLtoClasses.getAllClassesfromXml(configs);  // get classes from XMLS
+
+//                if(1>0)
+//                    return;
 
                 ArrayList<String> beans = new ArrayList<>();
                 getusefulClasses(allClasses, beans);// with annotaion of : @component
@@ -55,39 +60,43 @@ public class findCyclicDependency {
 
                 makeDirectedGraph(beans, "addEdge");
 
+
                 printGraph(edges);
                 boolean iscycle = findCycle(edges);
-                System.out.println("the graph has a cycle : " + iscycle);
-                if (!iscycle) {
-                    firstGoodCommit = commit.getId();
-                    break;
-                }
+                System.out.println("************************* THE GRAPH HAS A CYCLE : " + iscycle+" *********************************");
+//                if (!iscycle) {
+//                        throw new Exception();
+//                    firstGoodCommit = commit.getId();
+//                    break;
+//                }
 
-                firstFaultyCommit = commit.getId();
-            }
-            if (firstGoodCommit == "") {
-                System.out.println("initial commit has cycle");
-                return;
-            }
-            else if (firstFaultyCommit == "") {
-                System.out.println("no cycle present");
-                return;
-            }
+//                firstFaultyCommit = commit.getId();
+//            }
+//            if (firstGoodCommit == "") {
+//                System.out.println("initial commit has cycle");
+//                return;
+//            }
+//            else if (firstFaultyCommit == "") {
+//                System.out.println("no cycle present");
+//                return;
+//            }
 
 //            runCmd("git checkout mybranch");
 //            Process proc2 = Runtime.getRuntime().exec("git checkout mybranch");
 //            proc2.waitFor();
 
-            System.out.println("first good commit : " + firstGoodCommit + "\n" + "first faulty commit " + firstFaultyCommit);
-            getFaultyEdges(firstGoodCommit, firstFaultyCommit);
+//            System.out.println("first good commit : " + firstGoodCommit + "\n" + "first faulty commit " + firstFaultyCommit);
+//            getFaultyEdges(firstGoodCommit, firstFaultyCommit);
 
-            return;
-        }
-        finally {
-            Process process = Runtime.getRuntime().exec("git checkout -f mybranch");
-            process.waitFor();
-            return;
-        }
+//            return;
+//        }
+//        finally {
+//            Process process = Runtime.getRuntime().exec("git checkout -f mybranch");
+//            process.waitFor();
+//            return;
+//        }
+
+        return;
 
     }
 
@@ -96,8 +105,7 @@ public class findCyclicDependency {
         for(String className:beans){
 //            System.out.println("\n"+className+" has dependencies on :");
 
-            Class<?> thisClass = Class.forName(className);    // should not have a prefix "class"
-
+            Class<?> thisClass = Class.forName(className);// should not have a prefix "class"
 
             try {
 
@@ -111,69 +119,86 @@ public class findCyclicDependency {
                     {
                         if(fields[i].getType().isInterface())
                         {
+
                             if(fields[i].isAnnotationPresent((Qualifier.class))!=false)
                             {
                                 String qualifierName=fields[i].getAnnotation(Qualifier.class).value();
-
 //                                System.out.println("qualifier value is : "+ qualifierName);
 
-                                // isss qualifier ki class pata karo
+                                // find class of this qualifier
                                 String qualifierClass= idToClassMap.get(qualifierName);
                                 if(qualifierClass!=null)
                                     addEdgeByThis(addMethod,className,qualifierClass);
 
                             }
-                            else
-                            {
-                                boolean foundPrimary=false;
 
-                                //get all implementations
-                                Class myClass=fields[i].getType();
-                                Reflections reflections = new Reflections();
-                                Set< Class<?> > implementations = reflections.getSubTypesOf(myClass);
-                                if(implementations.size()==0){
-                                    System.out.println("no implementation found of interface "+
-                                            fields[i].getType().getName());
-                                    return;
-                                }
 
-                                if(implementations.size()==1)
-                                {
-//                                    System.out.println("only implementation is ");
-                                    for (Class<?> implementation : implementations){
-//                                        System.out.println(implementation.getName());
 
-                                        addEdgeByThis(addMethod,className,implementation.getName());
+                                                    else// find primary implementation if any
+                                                    {
+//                                                    System.out.println("    starting with finding primary : " +(System.currentTimeMillis()-now));
+//                                                        boolean foundPrimary=false;
 //
-                                        foundPrimary=true;
-                                    }
+//                                                        //get all implementations
+//                                                        Class myClass=fields[i].getType();
+//
+//                                                        Reflections reflections = new Reflections();
+//                                                        Set< Class<?> > implementations = reflections.getSubTypesOf(myClass);
+//                                                        System.out.println("    finding all implementations : " +(System.currentTimeMillis()-now));
+//
+//
+//
+//                                                        if(implementations.size()==0){
+//                                                            System.out.println("no implementation found of interface "+
+//                                                                    fields[i].getType().getName());
+//                                                            return;
+//                                                        }
+//
+//                                                        if(implementations.size()==1)
+//                                                        {
+//                        //                                    System.out.println("only implementation is ");
+//                                                            for (Class<?> implementation : implementations){
+//                        //                                        System.out.println(implementation.getName());
+//
+//                                                                addEdgeByThis(addMethod,className,implementation.getName());
+//                        //
+//                                                                foundPrimary=true;
+//                                                            }
+//
+//                                                        }
+//
+//                                                        else {
+//
+//                                                            for (Class<?> implementation : implementations) {
+//                                                                if (implementation.isAnnotationPresent(Primary.class) != false) {
+//                                                                    foundPrimary = true;
+//                        //                                            System.out.println(implementation.getName() + " is primary");
+//                                                                    addEdgeByThis(addMethod,className,implementation.getName());
+//
+//                                                                    break;
+//                                                                }
+//                        //                                    System.out.println(implementation.getName());
+//                                                            }
+//
+//                                                        }
+//
+//
+//                                                        if(foundPrimary==false)
+//                                                        {
+//                                                            System.out.println("multiple implementations are present " +
+//                                                                    "which cannot be resolved");
+//                                                            return;
+//                                                        }
+                                                        for(Class<?> primary:primaryClasses){
+                                                            if(fields[i].getType().isAssignableFrom(primary)){
+                                                                addEdgeByThis(addMethod,className,primary.getName());
+                                                                break;
+                                                            }
+                                                        }
 
-                                }
-
-                                else {
-
-                                    for (Class<?> implementation : implementations) {
-                                        if (implementation.isAnnotationPresent(Primary.class) != false) {
-                                            foundPrimary = true;
-//                                            System.out.println(implementation.getName() + " is primary");
-                                            addEdgeByThis(addMethod,className,implementation.getName());
-
-                                            break;
-                                        }
-//                                    System.out.println(implementation.getName());
-                                    }
-
-                                }
+                                                    }
 
 
-                                if(foundPrimary==false)
-                                {
-                                    System.out.println("multiple implementations are present " +
-                                            "which cannot be resolved");
-                                    return;
-                                }
-
-                            }
                         }
 
                         // not an interface
@@ -186,6 +211,7 @@ public class findCyclicDependency {
                     }
 
                 }
+
 
 //              finding autowires in constructors
                 for(int i=0;i< constructors.length;i++)
@@ -215,52 +241,60 @@ public class findCyclicDependency {
 
                                 else
                                 {
-                                    boolean foundPrimary=false;
+//                                    boolean foundPrimary=false;
+//
+//                                    //get all implementations
+//                                    Class myClass=parameters[j].getType();
+//                                    Reflections reflections = new Reflections();
+//                                    Set< Class<?> > implementations = reflections.getSubTypesOf(myClass);
+//
+//                                    if(implementations.size()==0)
+//                                    {
+//                                        System.out.println("no implementation found of interface "+
+//                                                parameters[j].getType().getName());
+//                                        return;
+//                                    }
+//
+//                                    if(implementations.size()==1)
+//                                    {
+////                                    System.out.println("only implementation is ");
+//                                        for (Class<?> implementation : implementations){
+////                                            System.out.println(implementation.getName());
+//                                            addEdgeByThis(addMethod,className,implementation.getName());
+//                                            foundPrimary=true;
+//                                        }
+//
+//                                    }
+//
+//                                    else {
+//
+//                                        for (Class<?> implementation : implementations) {
+//                                            if (implementation.isAnnotationPresent(Primary.class) != false) {
+//                                                foundPrimary = true;
+////                                                System.out.println(implementation.getName() + " is primary");
+//                                                addEdgeByThis(addMethod,className,implementation.getName());
+//
+//                                                break;
+//                                            }
+////                                    System.out.println(implementation.getName());
+//                                        }
+//
+//                                    }
+//
+//
+//                                    if(foundPrimary==false)
+//                                    {
+//                                        System.out.println("multiple implementations are present " +
+//                                                "which cannot be resolved");
+//                                        return;
+//                                    }
+                                    // look if any primary class implements this interface
+                                    for(Class<?> primary:primaryClasses){
 
-                                    //get all implementations
-                                    Class myClass=parameters[j].getType();
-                                    Reflections reflections = new Reflections();
-                                    Set< Class<?> > implementations = reflections.getSubTypesOf(myClass);
-
-                                    if(implementations.size()==0)
-                                    {
-                                        System.out.println("no implementation found of interface "+
-                                                parameters[j].getType().getName());
-                                        return;
-                                    }
-
-                                    if(implementations.size()==1)
-                                    {
-//                                    System.out.println("only implementation is ");
-                                        for (Class<?> implementation : implementations){
-//                                            System.out.println(implementation.getName());
-                                            addEdgeByThis(addMethod,className,implementation.getName());
-                                            foundPrimary=true;
+                                        if(parameters[j].getType().isAssignableFrom(primary)){
+                                            addEdgeByThis(addMethod,className,primary.getName());
+                                            break;
                                         }
-
-                                    }
-
-                                    else {
-
-                                        for (Class<?> implementation : implementations) {
-                                            if (implementation.isAnnotationPresent(Primary.class) != false) {
-                                                foundPrimary = true;
-//                                                System.out.println(implementation.getName() + " is primary");
-                                                addEdgeByThis(addMethod,className,implementation.getName());
-
-                                                break;
-                                            }
-//                                    System.out.println(implementation.getName());
-                                        }
-
-                                    }
-
-
-                                    if(foundPrimary==false)
-                                    {
-                                        System.out.println("multiple implementations are present " +
-                                                "which cannot be resolved");
-                                        return;
                                     }
 
                                 }
@@ -284,9 +318,6 @@ public class findCyclicDependency {
                 }
             }
 
-
-
-
             catch (Throwable e) {
                 System.err.println(e);
             }
@@ -309,7 +340,7 @@ public class findCyclicDependency {
 
         // get classes from bean-id pairs and the packages to be scanned
         XMLtoClasses xmLtoClasses=new XMLtoClasses();
-        ArrayList<String> allClasses=xmLtoClasses.getAllClassesfromXml(new String[]{"ApplicationContext.xml"});
+        ArrayList<String> allClasses=xmLtoClasses.getAllClassesfromXml(configs);
 
 
         ArrayList<String> beans = new ArrayList<>();
@@ -336,7 +367,7 @@ public class findCyclicDependency {
 
 
         // get classes from bean-id pairs and the packages to be scanned
-        allClasses=xmLtoClasses.getAllClassesfromXml(new String[]{"ApplicationContext.xml"});
+        allClasses=xmLtoClasses.getAllClassesfromXml(configs);
 
 
          beans = new ArrayList<>();
@@ -463,7 +494,7 @@ public class findCyclicDependency {
     }
 
     public static void addEdgeByThis(String methodName,String className,String newnbr) throws Exception {
-        findCyclicDependency obj=new findCyclicDependency();
+        FindCyclicDependency obj=new FindCyclicDependency();
         Class<?>[] paramTypes = {String.class, String.class};
         Class<?> classObj = obj.getClass();
 
@@ -593,7 +624,7 @@ public class findCyclicDependency {
         {
             if (isCyclicUtil(s, visited, recStack,ed))
             {
-                System.out.println("cycle is "+loop);
+                System.out.println("CYCLE IS  "+loop);
                 return true;
             }
 
