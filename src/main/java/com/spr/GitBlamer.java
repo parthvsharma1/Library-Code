@@ -18,8 +18,7 @@ class Dependency{
 
     @Override
     public String toString(){
-        String a=from+" -> "+to+" at "+time+" from "+commitId;
-        return a;
+        return from+" -> "+to+" at "+time+" from "+commitId;
     }
 }
 
@@ -39,14 +38,14 @@ public class GitBlamer {
 
         for(int i=6;i<n;i++){ // before 6th idx we have commit info
 
-            if(splited[i]=="("||splited[i].equals(currClassName+"("))
+            if(splited[i].equals("(")||splited[i].equals(currClassName+"("))
             {
                 int j=i+1;
                 while(j<n){
                     allClasses.add(splited[j]);
 
                     // move until finding ,
-                    while (j<n && splited[j]!=",")
+                    while (j<n && !splited[j].equals(","))
                         j++;
 
                     j++;
@@ -68,47 +67,62 @@ public class GitBlamer {
         String commitId=splited[0];
         String commitTime=splited[2]+splited[3];
         String toClassName;
-        if(splited[6]=="public" || splited[6]=="private"|| splited[6]=="protected")
-         toClassName=splited[7];
+        if(splited[6].equals("public") || splited[6].equals("private")|| splited[6].equals("protected"))
+            toClassName=splited[7];
         else
             toClassName=splited[6];
 
         Dependency d=new Dependency(currClassName,toClassName,commitTime,commitId);
-                classDependencies.add(d);
+        classDependencies.add(d);
 
     }
 
-    public static void main(String[] ar) throws IOException {
-         classDependencies=new ArrayList<>();
+    public static boolean isJava(String fileName){
+        return fileName.endsWith("java");
+    }
+    public static void getFnames(String sDir, ArrayList<File> filesList) {
+        File[] faFiles = new File(sDir).listFiles();
 
-         // sample path and name of a class for testing.........
-        File directoryPath = new File("/Users/parth.sharma/Documents/CircularDependencylts/src/main/java/org/parth");
-        FilenameFilter textFilefilter = new FilenameFilter(){
-            public boolean accept(File dir, String name) {
-                String lowercaseName = name.toLowerCase();
-                if (lowercaseName.endsWith(".java")) {
-                    return true;
-                } else {
-                    return false;
-                }
+        assert faFiles != null;
+        for (File file : faFiles) {
+            if (file.isDirectory()) {
+                getFnames(file.getAbsolutePath(),filesList);
             }
-        };
+            else if (isJava(file.getName())) {
+//                System.out.println(file.getAbsolutePath());
+                filesList.add(file);
+            }
+        }
+    }
+    public static void main(String[] args) throws IOException {
+
+
+        classDependencies=new ArrayList<>();
+        // sample path and name of a class for testing.........
+        Scanner sc= new Scanner(System.in);    //System.in is a standard input stream
+        System.out.print("Enter full directory path - ");
+        String directoryPathName= sc.next();
+
+        long now=System.currentTimeMillis();
+
         //List of all the text files
-        File filesList[] = directoryPath.listFiles(textFilefilter);
+        ArrayList<File> filesList=new ArrayList<>();
+        getFnames(directoryPathName,filesList);
+
+
 
         for(File file : filesList) {
+
             String path = file.getAbsolutePath();
             String currClassName = file.getName();
             currClassName = currClassName.substring(0, currClassName.length() - 5);
 
-            long now = System.currentTimeMillis();
             String command = "git blame " + path;
-            Process proc = Runtime.getRuntime().exec(command);
-
+            Process proc = Runtime.getRuntime().exec(command,null,new File(directoryPathName));
             BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()));
-            System.out.println("Time for git blame : " + (System.currentTimeMillis() - now)+" ms");
-            String line = "";
-            String prev = "-1";// when we find any class, we have to check if there is @component annotation before it
+
+            String line;
+            String prev = "-1";// when we find any class definition, we have to check if there is @component annotation before it
             boolean isAutowired = false;
 
             while ((line = reader.readLine()) != null) {
@@ -129,37 +143,27 @@ public class GitBlamer {
 
                 }
 
-                if (line.contains("@Autowired"))
-                    isAutowired = true;
-                else
-                    isAutowired = false;
+                isAutowired = line.contains("@Autowired");
 
 
                 prev = line;
             }
         }
 
-
+        System.out.println("time after git blame :" +(System.currentTimeMillis()-now));
 
         // sort deps based on time
-//        classDependencies.add(new Dependency("B","A","2022-05-2902:13:19","chichi"));
-
-        Collections.sort(classDependencies, new Comparator<Dependency>() {
-            @Override
-            public int compare(Dependency o1, Dependency o2) {
-                return o1.time.compareTo(o2.time);
-            }
-        });
+        Collections.sort(classDependencies, Comparator.comparing(o -> o.time));
 
 
-        System.out.println(classDependencies.size());
-        for(int i=0;i<classDependencies.size();i++){
-            System.out.println(classDependencies.get(i));
+//        System.out.println(classDependencies.size());
+        for (Dependency classDependency : classDependencies) {
+            System.out.println(classDependency);
         }
 
         // make graph
 
-         Map<String, Set<String>> graph=new HashMap<>() ;
+        Map<String, Set<String>> graph=new HashMap<>() ;
         for(int i=0;i< classDependencies.size();i++)
         {
 
@@ -183,12 +187,12 @@ public class GitBlamer {
             {
                 System.out.println("found cycle due to commit "+classDependencies.get(i).commitId);
                 System.out.println("the faulty dependency is "
-                                +classDependencies.get(i).from+" to "+classDependencies.get(i).to);
+                        +classDependencies.get(i).from+" to "+classDependencies.get(i).to);
 
                 return;
             }
         }
-    System.out.println("No cycle found !!!!!!!");
+        System.out.println("No cycle found !!!!!!!");
 
     }
 
