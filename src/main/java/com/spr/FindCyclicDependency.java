@@ -28,6 +28,8 @@ public class FindCyclicDependency {
 
     public static void main(String[] args) throws Exception {
 
+//        if(1>0)
+//        throw new Exception();
 
 //        Commit currCommit= RunShellCommandFromJava.getCurrCommit();
 
@@ -63,38 +65,22 @@ public class FindCyclicDependency {
 
                 printGraph(edges);
                 boolean iscycle = findCycle(edges);
-                System.out.println("************************* THE GRAPH HAS A CYCLE : " + iscycle+" *********************************");
-//                if (!iscycle) {
-//                        throw new Exception();
-//                    firstGoodCommit = commit.getId();
-//                    break;
-//                }
 
-//                firstFaultyCommit = commit.getId();
-//            }
-//            if (firstGoodCommit == "") {
-//                System.out.println("initial commit has cycle");
-//                return;
-//            }
-//            else if (firstFaultyCommit == "") {
-//                System.out.println("no cycle present");
-//                return;
-//            }
+                if(iscycle)
+                    System.out.println("************************* THE GRAPH HAS A CYCLE : TRUE ****************************");
+                else {
+                    System.out.println("************************* THE GRAPH HAS A CYCLE : FALSE ***************************");
+                    throw new Exception();
+                }
 
-//            runCmd("git checkout mybranch");
-//            Process proc2 = Runtime.getRuntime().exec("git checkout mybranch");
-//            proc2.waitFor();
+
 
 //            System.out.println("first good commit : " + firstGoodCommit + "\n" + "first faulty commit " + firstFaultyCommit);
 //            getFaultyEdges(firstGoodCommit, firstFaultyCommit);
 
 //            return;
 //        }
-//        finally {
-//            Process process = Runtime.getRuntime().exec("git checkout -f mybranch");
-//            process.waitFor();
-//            return;
-//        }
+//
 
         return;
 
