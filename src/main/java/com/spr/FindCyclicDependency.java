@@ -103,8 +103,6 @@ public class FindCyclicDependency {
                 for(int i=0;i<fields.length;i++){
                     if(fields[i].isAnnotationPresent(Autowired.class)!=false)
                     {
-                        if(fields[i].getType().isInterface())
-                        {
 
                             if(fields[i].isAnnotationPresent((Qualifier.class))!=false)
                             {
@@ -118,78 +116,21 @@ public class FindCyclicDependency {
 
                             }
 
-
-
-                                                    else// find primary implementation if any
-                                                    {
-//                                                    System.out.println("    starting with finding primary : " +(System.currentTimeMillis()-now));
-//                                                        boolean foundPrimary=false;
-//
-//                                                        //get all implementations
-//                                                        Class myClass=fields[i].getType();
-//
-//                                                        Reflections reflections = new Reflections();
-//                                                        Set< Class<?> > implementations = reflections.getSubTypesOf(myClass);
-//                                                        System.out.println("    finding all implementations : " +(System.currentTimeMillis()-now));
-//
-//
-//
-//                                                        if(implementations.size()==0){
-//                                                            System.out.println("no implementation found of interface "+
-//                                                                    fields[i].getType().getName());
-//                                                            return;
-//                                                        }
-//
-//                                                        if(implementations.size()==1)
-//                                                        {
-//                        //                                    System.out.println("only implementation is ");
-//                                                            for (Class<?> implementation : implementations){
-//                        //                                        System.out.println(implementation.getName());
-//
-//                                                                addEdgeByThis(addMethod,className,implementation.getName());
-//                        //
-//                                                                foundPrimary=true;
-//                                                            }
-//
-//                                                        }
-//
-//                                                        else {
-//
-//                                                            for (Class<?> implementation : implementations) {
-//                                                                if (implementation.isAnnotationPresent(Primary.class) != false) {
-//                                                                    foundPrimary = true;
-//                        //                                            System.out.println(implementation.getName() + " is primary");
-//                                                                    addEdgeByThis(addMethod,className,implementation.getName());
-//
-//                                                                    break;
-//                                                                }
-//                        //                                    System.out.println(implementation.getName());
-//                                                            }
-//
-//                                                        }
-//
-//
-//                                                        if(foundPrimary==false)
-//                                                        {
-//                                                            System.out.println("multiple implementations are present " +
-//                                                                    "which cannot be resolved");
-//                                                            return;
-//                                                        }
-                                                        for(Class<?> primary:primaryClasses){
-                                                            if(fields[i].getType().isAssignableFrom(primary)){
-                                                                addEdgeByThis(addMethod,className,primary.getName());
-                                                                break;
-                                                            }
-                                                        }
-
-                                                    }
-
-
+                            // find primary implementation if any
+                        boolean foundPrimary=false;
+                        for(Class<?> primary:primaryClasses){
+                            if(fields[i].getType().isAssignableFrom(primary)){
+                                addEdgeByThis(addMethod,className,primary.getName());
+                                foundPrimary=true;
+                                break;
+                            }
                         }
 
                         // not an interface
-                        else
+                        if(!foundPrimary)
                         {
+                            if(fields[i].getType().isInterface())
+                                throw new RuntimeException("no implementation of interface ");
                             String newnbr = fields[i].getType().getName();
 //                        String newnbr2=fields[i].getName();
                            addEdgeByThis(addMethod,className,newnbr);
@@ -208,9 +149,6 @@ public class FindCyclicDependency {
                         for(int j=0;j< parameters.length;j++)
                         {
 
-                            if(parameters[j].getType().isInterface())
-                            {
-
                                 if (parameters[j].isAnnotationPresent(Qualifier.class) != false)
                                 {
                                     String qualifierName = parameters[j].getAnnotation(Qualifier.class).value();
@@ -225,71 +163,21 @@ public class FindCyclicDependency {
 
                                 }
 
-                                else
-                                {
-//                                    boolean foundPrimary=false;
-//
-//                                    //get all implementations
-//                                    Class myClass=parameters[j].getType();
-//                                    Reflections reflections = new Reflections();
-//                                    Set< Class<?> > implementations = reflections.getSubTypesOf(myClass);
-//
-//                                    if(implementations.size()==0)
-//                                    {
-//                                        System.out.println("no implementation found of interface "+
-//                                                parameters[j].getType().getName());
-//                                        return;
-//                                    }
-//
-//                                    if(implementations.size()==1)
-//                                    {
-////                                    System.out.println("only implementation is ");
-//                                        for (Class<?> implementation : implementations){
-////                                            System.out.println(implementation.getName());
-//                                            addEdgeByThis(addMethod,className,implementation.getName());
-//                                            foundPrimary=true;
-//                                        }
-//
-//                                    }
-//
-//                                    else {
-//
-//                                        for (Class<?> implementation : implementations) {
-//                                            if (implementation.isAnnotationPresent(Primary.class) != false) {
-//                                                foundPrimary = true;
-////                                                System.out.println(implementation.getName() + " is primary");
-//                                                addEdgeByThis(addMethod,className,implementation.getName());
-//
-//                                                break;
-//                                            }
-////                                    System.out.println(implementation.getName());
-//                                        }
-//
-//                                    }
-//
-//
-//                                    if(foundPrimary==false)
-//                                    {
-//                                        System.out.println("multiple implementations are present " +
-//                                                "which cannot be resolved");
-//                                        return;
-//                                    }
-                                    // look if any primary class implements this interface
-                                    for(Class<?> primary:primaryClasses){
-
-                                        if(parameters[j].getType().isAssignableFrom(primary)){
-                                            addEdgeByThis(addMethod,className,primary.getName());
-                                            break;
-                                        }
+                                boolean foundPrimary=false;
+                                for(Class<?> primary:primaryClasses){
+                                    if(parameters[j].getType().isAssignableFrom(primary)){
+                                        addEdgeByThis(addMethod,className,primary.getName());
+                                        foundPrimary=true;
+                                        break;
                                     }
-
                                 }
 
-                            }
 
-
-                            else
+                            if(!foundPrimary)
                             {
+                                if(parameters[j].getType().isInterface())
+                                    throw new RuntimeException("No implementation for this interface");
+
                                 String newnbr = parameters[i].getType().getName();
                                 //                                System.out.println(newnbr);
                                 addEdgeByThis(addMethod,className,newnbr);
@@ -297,7 +185,7 @@ public class FindCyclicDependency {
                             }
 
                         }
-//
+
                     }
 
 
