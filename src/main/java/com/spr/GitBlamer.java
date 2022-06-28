@@ -2,11 +2,6 @@ package com.spr;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Controller;
-import org.springframework.stereotype.Repository;
-import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -16,28 +11,18 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Parameter;
 import java.util.*;
 
-import static com.spr.XMLtoClasses.idToClassMap;
-import static com.spr.XMLtoClasses.primaryClasses;
-
 public class GitBlamer {
+
     public static ArrayList<Dependency> classDependencies=new ArrayList<>();
     private static String loop="";
     private static String baseElement="";
 
-    public static void main(String[] args) throws Exception {
-
-        XMLtoClasses xmLtoClasses = new XMLtoClasses();
-        ArrayList<String> allClasses=xmLtoClasses.getAllClassesfromXml(new String[]{"ApplicationContext.xml"});
-
-        ArrayList<String> beans = getusefulClasses(allClasses);
-//        ArrayList<String> beans=new ArrayList<>();
-//        beans.add("org.parth.A");
-
+    public void findCircularDependency(String packageName, String... configLocations) throws Exception {
+        XMLtoClasses xmLtoClasses = new XMLtoClasses(packageName, configLocations);
+        List<Class<?>> beans = xmLtoClasses.getPackageBeans();
         resolveDependencies(beans);
 
-//        Collections.sort(classDependencies, Comparator.comparing(o -> o.time));
-
-        Collections.sort(classDependencies, (o1, o2) -> o2.time.compareTo(o1.time));
+        classDependencies.sort((o1, o2) -> o2.getDateTimestamp().compareTo(o1.getDateTimestamp()));
 
         for (Dependency classDependency : classDependencies) {
             System.out.println(classDependency);
@@ -52,17 +37,17 @@ public class GitBlamer {
         {
 
             //adding edge
-            Set<String> currnbrs=graph.get(classDependencies.get(i).from);
+            Set<String> currnbrs=graph.get(classDependencies.get(i).getFromBean());
             if(currnbrs!=null)
             {
-                currnbrs.add(classDependencies.get(i).to);
-                graph.put(classDependencies.get(i).from, currnbrs);
+                currnbrs.add(classDependencies.get(i).getToBean());
+                graph.put(classDependencies.get(i).getFromBean(), currnbrs);
 
             }
             else {
                 Set<String> currnbr = new HashSet<>();
-                currnbr.add(classDependencies.get(i).to);
-                graph.put(classDependencies.get(i).from,currnbr);
+                currnbr.add(classDependencies.get(i).getToBean());
+                graph.put(classDependencies.get(i).getFromBean(),currnbr);
 
             }
 
@@ -87,14 +72,14 @@ public class GitBlamer {
 
         //remove edges
         for(int i=0;i< classDependencies.size();i++){
-            Set<String> currnbrs=graph.get(classDependencies.get(i).from);
-            currnbrs.remove(classDependencies.get(i).to);
-            graph.put(classDependencies.get(i).from, currnbrs);
+            Set<String> currnbrs=graph.get(classDependencies.get(i).getFromBean());
+            currnbrs.remove(classDependencies.get(i).getToBean());
+            graph.put(classDependencies.get(i).getFromBean(), currnbrs);
 
             if(!findCycle(graph)){
-                System.out.println("found cycle due to commit "+classDependencies.get(i).commitId);
+                System.out.println("found cycle due to commit "+classDependencies.get(i).getCommitHash());
                 System.out.println("the faulty dependency is "
-                        +classDependencies.get(i).from+" to "+classDependencies.get(i).to);
+                        +classDependencies.get(i).getFromBean()+" to "+classDependencies.get(i).getToBean());
                 return;
 //
             }
@@ -160,19 +145,17 @@ public class GitBlamer {
 
 
 
-    private static void resolveDependencies(ArrayList<String> beans) throws Exception {
-        for(String className:beans){
+    private void resolveDependencies(List<Class<?>> beans) throws Exception {
+        for (Class<?> bean : beans) {
+            String simpleName = bean.getSimpleName();
 
-            Class<?> thisClass = Class.forName(className);
-            String name= thisClass.getSimpleName();
+            Field[] fields = bean.getDeclaredFields();
+            Constructor<?>[] constructors= bean.getConstructors();
 
-            Field[] fields=thisClass.getDeclaredFields();       // declared se private bhi aa jaaenge but inherited nahi aenge
-            Constructor[] constructors= thisClass.getConstructors();
-
-            ArrayList<Field> autowireField=new ArrayList<>();
-            for(Field f:fields){
-                if(f.isAnnotationPresent(Autowired.class)!=false)
-                    autowireField.add(f);
+            ArrayList<Field> autowireField = new ArrayList<>();
+            for (Field field : fields)
+                if (field.isAnnotationPresent(Autowired.class))
+                    autowireField.add(field);
             }
 
             ArrayList<Constructor> autowireConstructor=new ArrayList<>();
@@ -182,7 +165,7 @@ public class GitBlamer {
             }
 
 
-            String location=thisClass.getProtectionDomain().getCodeSource().getLocation().getPath();
+            String location= bean.getProtectionDomain().getCodeSource().getLocation().getPath();
             location=location.replaceAll("build/classes/java/main","src/main/java");
 
             String nameToPath=className.replace('.','/');
@@ -276,25 +259,6 @@ public class GitBlamer {
             }
 
         }
-    }
-
-
-    public static ArrayList<String> getusefulClasses(ArrayList<String> allClasses) throws ClassNotFoundException {
-        ArrayList<String> beans=new ArrayList<>();
-        for(String className:allClasses)
-        {
-            Class<?> thisClass = Class.forName(className);
-            if( thisClass.isAnnotationPresent(Component.class)!=false) {
-                beans.add(thisClass.getName());
-            }
-            /// automatically find sub compnents
-            else if (thisClass.isAnnotationPresent(Service.class)!=false || thisClass.isAnnotationPresent(Repository.class)!=false || thisClass.isAnnotationPresent(Controller.class)!=false || thisClass.isAnnotationPresent(Configuration.class)!=false) {
-                beans.add(thisClass.getName());
-            }
-
-        }
-
-        return beans;
     }
 
     public static boolean findCycle(Map<String,Set<String>> ed) {

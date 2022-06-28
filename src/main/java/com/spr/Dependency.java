@@ -1,20 +1,37 @@
 package com.spr;
 
 public class Dependency {
-    public Dependency(String from, String to, String time, String commitId) {
-        this.from = from;
-        this.to = to;
-        this.time = time;
-        this.commitId = commitId;
+
+    private final String fromBean;
+    private final String toBean;
+    private final String dateTimestamp;
+    private final String commitHash;
+
+    public Dependency(String fromBean, String toBean, String dateTimestamp, String commitHash) {
+        this.fromBean = fromBean;
+        this.toBean = toBean;
+        this.dateTimestamp = dateTimestamp;
+        this.commitHash = commitHash;
     }
 
-    public String from;
-    public String to;
-    public String time;
-    public String commitId;
+    public String getFromBean() {
+        return fromBean;
+    }
+
+    public String getToBean() {
+        return toBean;
+    }
+
+    public String getDateTimestamp() {
+        return dateTimestamp;
+    }
+
+    public String getCommitHash() {
+        return commitHash;
+    }
 
     @Override
     public String toString() {
-        return from + " -> " + to + " at " + time + " from " + commitId;
+        return fromBean + " -> " + toBean + " at " + dateTimestamp + " from " + commitHash;
     }
 }

@@ -1,45 +1,67 @@
 package com.spr;
 
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
+import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class XMLtoClasses extends ClassPathXmlApplicationContext {
-    public static Map<String, String> idToClassMap;
-    public static ArrayList<Class<?>> primaryClasses;
 
-    public ArrayList<String> getAllClassesfromXml(String[] configLocations) throws ClassNotFoundException {
+    private final String basePackage;
+    private final Map<String, Class<?>> beanIdToClassMap;
+    private final List<Class<?>> primaryBeans;
 
-        idToClassMap=new HashMap<>();
-        primaryClasses=new ArrayList<>();
+    public XMLtoClasses(String basePackage, String... configLocations) throws BeansException {
+        super(configLocations, false, null);
 
-        ArrayList<String> beans=new ArrayList<>();
-        this.setConfigLocations(configLocations);
-        ConfigurableListableBeanFactory beanFactory = this.obtainFreshBeanFactory();
-
-
-        String[] beanNames=this.getBeanDefinitionNames();
-
-        for(String itr:beanNames)
-        {
-            BeanDefinition bd=beanFactory.getBeanDefinition(itr);
-            String className=bd.getBeanClassName();
-            beans.add(className);
-            idToClassMap.put(itr,bd.getBeanClassName());
-
-            Class<?> thisClass = Class.forName(className);
-            if(bd.isPrimary())
-                primaryClasses.add(thisClass);
+        if (StringUtils.isEmpty(basePackage)) {
+            throw new IllegalArgumentException("Base package must be provided");
         }
-//
-//        destroyBeans();
-//
-//        resetCommonCaches();
+        this.basePackage = basePackage;
 
-        return beans;
+        Map<String, Class<?>> beanIdMap = new HashMap<>();
+        List<Class<?>> primaryClasses = new ArrayList<>();
+
+        ConfigurableListableBeanFactory beanFactory = this.obtainFreshBeanFactory();
+        String[] beanIds = this.getBeanDefinitionNames();
+        for (String beanId : beanIds) {
+            BeanDefinition beanDefinition = beanFactory.getBeanDefinition(beanId);
+            Class<?> clazz = beanDefinition.getClass();
+            if (!clazz.getName().startsWith(basePackage)) {
+                continue;
+            }
+            beanIdMap.put(beanId, clazz);
+            if (beanDefinition.isPrimary()) {
+                primaryClasses.add(clazz);
+            }
+        }
+
+        this.beanIdToClassMap = Collections.unmodifiableMap(beanIdMap);
+        this.primaryBeans = Collections.unmodifiableList(primaryClasses);
+    }
+
+    public String getClassName(String beanId) {
+        Class<?> clazz =  beanIdToClassMap.get(beanId);
+        if (clazz == null) {
+            return null;
+        }
+        return clazz.getName();
+    }
+
+    public String getPrimaryBean(Class<?> clazz) {
+        for (Class<?> primaryBean : primaryBeans) {
+           if (clazz.isAssignableFrom(primaryBean)) {
+               return primaryBean.getName();
+           }
+        }
+        return null;
+    }
+
+    // TODO : change name
+    public List<Class<?>> getPackageBeans() {
+        return new ArrayList<>(beanIdToClassMap.values());
     }
 }
