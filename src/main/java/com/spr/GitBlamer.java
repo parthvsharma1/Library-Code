@@ -17,11 +17,18 @@ public class GitBlamer {
     private static String loop="";
     private static String baseElement="";
 
-    public void findCircularDependency(String packageName, String... configLocations) throws Exception {
-        XMLtoClasses xmLtoClasses = new XMLtoClasses(packageName, configLocations);
-        List<Class<?>> beans = xmLtoClasses.getPackageBeans();
+    private final ExtractClassfromXml xmLtoClasses;
+    private final List<Class<?>> beans;
+    public GitBlamer(String packageName, String[] configLocations) throws ClassNotFoundException {
+        xmLtoClasses = new ExtractClassfromXml(packageName, configLocations);
+        beans = xmLtoClasses.getPackageBeans();
+    }
+
+    public void findCircularDependency() throws Exception {
+
         resolveDependencies(beans);
 
+        // TODO : sort with latest first
         classDependencies.sort((o1, o2) -> o2.getDateTimestamp().compareTo(o1.getDateTimestamp()));
 
         for (Dependency classDependency : classDependencies) {
@@ -29,8 +36,7 @@ public class GitBlamer {
         }
 
 
-
-        //make graph
+        // TODO : MAKE GRAPH
         boolean isCycle=false;
         Map<String, Set<String>> graph=new HashMap<>() ;
         for(int i=0;i< classDependencies.size();i++)
@@ -38,8 +44,7 @@ public class GitBlamer {
 
             //adding edge
             Set<String> currnbrs=graph.get(classDependencies.get(i).getFromBean());
-            if(currnbrs!=null)
-            {
+            if(currnbrs!=null) {
                 currnbrs.add(classDependencies.get(i).getToBean());
                 graph.put(classDependencies.get(i).getFromBean(), currnbrs);
 
@@ -51,26 +56,20 @@ public class GitBlamer {
 
             }
 
-            //checking if this edge lead to cycle formation
-            if(findCycle(graph))
-            {
+            // TODO : checking if this edge lead to cycle formation
+            if(findCycle(graph)) {
                 isCycle=true;
                 System.out.println("cycle is : \n"+loop+"\n");
                 break;
-//                System.out.println("found cycle due to commit "+classDependencies.get(i).commitId);
-//                System.out.println("the faulty dependency is "
-//                        +classDependencies.get(i).from+" to "+classDependencies.get(i).to);
-//
-//                return;
             }
         }
-        if(!isCycle)
-        {
+
+        if(!isCycle) {
             System.out.println("No cycle found !!!!!!!");
             return;
         }
 
-        //remove edges
+        // TODO : remove edges and check if it removes cycle
         for(int i=0;i< classDependencies.size();i++){
             Set<String> currnbrs=graph.get(classDependencies.get(i).getFromBean());
             currnbrs.remove(classDependencies.get(i).getToBean());
@@ -81,7 +80,7 @@ public class GitBlamer {
                 System.out.println("the faulty dependency is "
                         +classDependencies.get(i).getFromBean()+" to "+classDependencies.get(i).getToBean());
                 return;
-//
+
             }
         }
 
@@ -100,7 +99,7 @@ public class GitBlamer {
 
     }
 
-    private static void addDependencyConstructor(String currClassName, String line,Parameter[] parameters) {
+    private void addDependencyConstructor(String currClassName, String line,Parameter[] parameters) {
         String[] splited = line.split("\\s+");
         String commitId = splited[0];
         String commitTime = splited[2] + splited[3];
@@ -111,7 +110,7 @@ public class GitBlamer {
             if(p.isAnnotationPresent(Qualifier.class)){
 
                 String qualifierName=p.getAnnotation(Qualifier.class).value();
-                String qualifierClass= idToClassMap.get(qualifierName);
+                String qualifierClass = xmLtoClasses.getClassName(qualifierName);
 
                 if(qualifierClass!=null){
                     Dependency d=new Dependency(currClassName,qualifierClass,commitTime,commitId);
@@ -125,13 +124,13 @@ public class GitBlamer {
             else {
 
                 boolean foundPrimary=false;
-                for(Class<?> primary:primaryClasses) {
-                    if (p.getType().isAssignableFrom(primary)) {
-                        Dependency d = new Dependency(currClassName,primary.getName(), commitTime, commitId);
+
+                   String primaryImplement = xmLtoClasses.getPrimaryBean(p.getClass());
+                    if (primaryImplement!=null) {
+                        Dependency d = new Dependency(currClassName,primaryImplement, commitTime, commitId);
                         classDependencies.add(d);
                         foundPrimary = true;
-                        break;
-                    }
+
                 }
                 if(!foundPrimary) {
                     String parameterName = p.getType().getName();
@@ -146,81 +145,80 @@ public class GitBlamer {
 
 
     private void resolveDependencies(List<Class<?>> beans) throws Exception {
+
         for (Class<?> bean : beans) {
             String simpleName = bean.getSimpleName();
+            String className=bean.getName();
 
             Field[] fields = bean.getDeclaredFields();
             Constructor<?>[] constructors= bean.getConstructors();
 
-            ArrayList<Field> autowireField = new ArrayList<>();
-            for (Field field : fields)
+            List<Field> autowireField = new ArrayList<>();
+            for (Field field : fields){
                 if (field.isAnnotationPresent(Autowired.class))
                     autowireField.add(field);
             }
 
-            ArrayList<Constructor> autowireConstructor=new ArrayList<>();
+            List<Constructor> autowireConstructor=new ArrayList<>();
             for(Constructor c:constructors){
                 if(c.isAnnotationPresent(Autowired.class)!=false)
                     autowireConstructor.add(c);
             }
 
 
-            String location= bean.getProtectionDomain().getCodeSource().getLocation().getPath();
-            location=location.replaceAll("build/classes/java/main","src/main/java");
+            String classLocation= bean.getProtectionDomain().getCodeSource().getLocation().getPath();
+            classLocation=classLocation.replaceAll("build/classes/java/main","src/main/java");
 
-            String nameToPath=className.replace('.','/');
-            String classPath=location+nameToPath;
-            classPath+=".java";
+            String pathFromRoot=className.replace('.','/');
+            String completeClassPath=classLocation+pathFromRoot;
+            completeClassPath+=".java";
 //
 //            System.out.println(className+":");
-//            System.out.println(location);
-//            System.out.println(classPath);
+//            System.out.println(classLocation);
+//            System.out.println(completeClassPath);
 //            if(1>0) continue;
 
-            String command = "git blame " + classPath;
-            Process proc = Runtime.getRuntime().exec(command,null,new File(location));
+            String command = "git blame " + completeClassPath;
+            Process proc = Runtime.getRuntime().exec(command,null,new File(classLocation));
             BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()));
 
-            String prev = "-1";// when we find any class definition, we have to check if there is @component annotation before it
+//            String prev = "-1";// when we find any class definition, we have to check if there is @component annotation before it
             boolean isAutowired = false;
 
 
             int fieldCounter=0;
             int constructorCounter=0;
-            String line;
+            String readLine;
 
-//            if(1>0) return;
-            while ((line = reader.readLine()) != null) {
+            while ((readLine = reader.readLine()) != null) {
 
                 if (isAutowired) {
 
-                    /* ignore other annotations*/
-                    while (line.contains("@"))
-                        line= reader.readLine();
+                    // TODO : ignore other annotations if any
+                    while (readLine.contains("@"))
+                        readLine= reader.readLine();
 
-                    //for constructor
-                    if (line.contains(" " +name + "(") || line.contains(" " + name + " (")) // add prefix " " tp avoid substring instrance of class name in another class
-                    {
-//                        System.out.println("constructor autowire");
+                    // TODO : auto-wired constructor
+                    // TODO :add prefix " " to avoid substring instrance of class name in another class
+                    if (readLine.contains(" " +simpleName + "(") || readLine.contains(" " + simpleName + " (")) {
                         Parameter[] parameters=autowireConstructor.get(constructorCounter).getParameters();
-                        addDependencyConstructor(className, line,parameters);
+                        addDependencyConstructor(className, readLine,parameters);
                         constructorCounter++;
                     }
 
-                    //for field
+                    // TODO : autowired field
                     else
                     {
-//                        System.out.println("field autowire");
 
                         Field currField=autowireField.get(fieldCounter);
 
                         if(currField.isAnnotationPresent((Qualifier.class))){
-//                            System.out.println("found a Qualifer ");
                             String qualifierName=currField.getAnnotation(Qualifier.class).value();
 
-                            String qualifierClass= idToClassMap.get(qualifierName);
+                            String qualifierClass = xmLtoClasses.getClassName(qualifierName);
+
                             if(qualifierClass!=null)
-                                addDependencyField(className,line,qualifierClass);
+                                addDependencyField(className,readLine,qualifierClass);
                             else
                                 throw new RuntimeException("no class with given qualifier");
 
@@ -228,16 +226,16 @@ public class GitBlamer {
 
                         else {
                             boolean foundPrimary=false;
-                            for(Class<?> primary:primaryClasses){
-                                if(currField.getType().isAssignableFrom(primary)){
-                                    addDependencyField(className,line,primary.getName());
-                                    foundPrimary=true;
-                                    break;
-                                }
+                            String primaryImplement = xmLtoClasses.getPrimaryBean(currField.getClass());
+
+                            if(primaryImplement!=null) {
+                                addDependencyField(className, readLine, primaryImplement);
+                                foundPrimary = true;
                             }
+
                             if(!foundPrimary) {
                                 String fieldName = autowireField.get(fieldCounter).getType().getName();
-                                addDependencyField(className, line, fieldName);
+                                addDependencyField(className, readLine, fieldName);
                             }
 
                         }
@@ -246,16 +244,16 @@ public class GitBlamer {
                     }
                 }
 
-                if (line.contains("class " +name )) {
-//                System.out.println(line);
-                    if (!(prev.contains("@Component") || prev.contains("@Service") || prev.contains("@Repository")))
-                        break;
+//                if (readLine.contains("class " +simpleName )) {
+////                System.out.println(line);
+//                    if (!(prev.contains("@Component") || prev.contains("@Service") || prev.contains("@Repository")))
+//                        break;
+//
+//                }
 
-                }
+                isAutowired = readLine.contains("@Autowired");
 
-                isAutowired = line.contains("@Autowired");
-
-                prev = line;
+//                prev = readLine;
             }
 
         }

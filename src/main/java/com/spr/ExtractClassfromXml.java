@@ -8,31 +8,35 @@ import org.springframework.util.StringUtils;
 
 import java.util.*;
 
-public class XMLtoClasses extends ClassPathXmlApplicationContext {
+public class ExtractClassfromXml extends ClassPathXmlApplicationContext {
 
-    private final String basePackage;
     private final Map<String, Class<?>> beanIdToClassMap;
     private final List<Class<?>> primaryBeans;
 
-    public XMLtoClasses(String basePackage, String... configLocations) throws BeansException {
+    public ExtractClassfromXml(String basePackage, String[] configLocations) throws BeansException, ClassNotFoundException {
         super(configLocations, false, null);
 
         if (StringUtils.isEmpty(basePackage)) {
             throw new IllegalArgumentException("Base package must be provided");
         }
-        this.basePackage = basePackage;
 
         Map<String, Class<?>> beanIdMap = new HashMap<>();
         List<Class<?>> primaryClasses = new ArrayList<>();
 
         ConfigurableListableBeanFactory beanFactory = this.obtainFreshBeanFactory();
-        String[] beanIds = this.getBeanDefinitionNames();
+
+        String[] beanIds = getBeanDefinitionNames();
+
         for (String beanId : beanIds) {
             BeanDefinition beanDefinition = beanFactory.getBeanDefinition(beanId);
-            Class<?> clazz = beanDefinition.getClass();
-            if (!clazz.getName().startsWith(basePackage)) {
+            String className=beanDefinition.getBeanClassName();
+
+            if (!className.startsWith(basePackage)) {
                 continue;
             }
+
+            Class<?> clazz = Class.forName(className,false,ClassLoader.getSystemClassLoader());
+
             beanIdMap.put(beanId, clazz);
             if (beanDefinition.isPrimary()) {
                 primaryClasses.add(clazz);
