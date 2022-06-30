@@ -1,21 +1,29 @@
-package com.spr;
+package com.spr.circularDependency;
 
 import org.springframework.beans.BeansException;
-import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 import org.springframework.util.StringUtils;
 
 import java.util.*;
 
-public class ExtractClassfromXml extends ClassPathXmlApplicationContext {
+public class SpringBeanDetailsProvider extends ClassPathXmlApplicationContext {
 
-    private final Map<String, Class<?>> beanIdToClassMap;
-    private final List<Class<?>> primaryBeans;
+    private final String basePackage;
+    private boolean initialized;
+    private Map<String, Class<?>> beanIdToClassMap;
+    private List<Class<?>> primaryBeans;
 
-    public ExtractClassfromXml(String basePackage, String[] configLocations) throws BeansException, ClassNotFoundException {
+    public SpringBeanDetailsProvider(String basePackage, String[] configLocations) throws BeansException {
         super(configLocations, false, null);
+        this.basePackage = basePackage;
+    }
 
+    public void init() throws Exception {
+        if (initialized) {
+            return;
+        }
         if (StringUtils.isEmpty(basePackage)) {
             throw new IllegalArgumentException("Base package must be provided");
         }
@@ -28,14 +36,15 @@ public class ExtractClassfromXml extends ClassPathXmlApplicationContext {
         String[] beanIds = getBeanDefinitionNames();
 
         for (String beanId : beanIds) {
-            BeanDefinition beanDefinition = beanFactory.getBeanDefinition(beanId);
-            String className=beanDefinition.getBeanClassName();
-
+            AbstractBeanDefinition beanDefinition = (AbstractBeanDefinition) beanFactory.getBeanDefinition(beanId);
+            Class<?> clazz = beanDefinition.resolveBeanClass(ClassLoader.getSystemClassLoader());
+            if (clazz == null) {
+                throw new RuntimeException("Class not found for beanId " + beanId);
+            }
+            String className = clazz.getName();
             if (!className.startsWith(basePackage)) {
                 continue;
             }
-
-            Class<?> clazz = Class.forName(className,false,ClassLoader.getSystemClassLoader());
 
             beanIdMap.put(beanId, clazz);
             if (beanDefinition.isPrimary()) {
@@ -45,9 +54,11 @@ public class ExtractClassfromXml extends ClassPathXmlApplicationContext {
 
         this.beanIdToClassMap = Collections.unmodifiableMap(beanIdMap);
         this.primaryBeans = Collections.unmodifiableList(primaryClasses);
+        initialized = true;
     }
 
     public String getClassName(String beanId) {
+        checkIfInitialized();
         Class<?> clazz =  beanIdToClassMap.get(beanId);
         if (clazz == null) {
             return null;
@@ -56,6 +67,7 @@ public class ExtractClassfromXml extends ClassPathXmlApplicationContext {
     }
 
     public String getPrimaryBean(Class<?> clazz) {
+        checkIfInitialized();
         for (Class<?> primaryBean : primaryBeans) {
            if (clazz.isAssignableFrom(primaryBean)) {
                return primaryBean.getName();
@@ -64,8 +76,14 @@ public class ExtractClassfromXml extends ClassPathXmlApplicationContext {
         return null;
     }
 
-    // TODO : change name
-    public List<Class<?>> getPackageBeans() {
+    public List<Class<?>> getAllBeans() {
+        checkIfInitialized();
         return new ArrayList<>(beanIdToClassMap.values());
+    }
+
+    private void checkIfInitialized() {
+        if (!initialized) {
+            throw new IllegalStateException("Must call init() before using on this method");
+        }
     }
 }

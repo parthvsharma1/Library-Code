@@ -1,4 +1,4 @@
-package com.spr;
+package com.spr.circularDependency;
 
 public class Dependency {
 
