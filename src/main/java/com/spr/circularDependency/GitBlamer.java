@@ -17,6 +17,7 @@ public class GitBlamer {
     private final ArrayList<Dependency> classDependencies = new ArrayList<>();
 
     private String cycle = "";
+    private List<Dependency> dependenciesInCycle;
     private String baseElement = "";
 
     private final String packageName;
@@ -25,6 +26,7 @@ public class GitBlamer {
     public GitBlamer(String packageName, String[] configLocations) {
         this.packageName = packageName;
         this.configLocations = configLocations;
+        dependenciesInCycle=new ArrayList<>();
     }
 
     public void findCircularDependency() throws Exception {
@@ -35,47 +37,45 @@ public class GitBlamer {
 
         resolveDependencies(beans, beanDetailsProvider);
 
-        // sort with latest first
-        classDependencies.sort((o1, o2) -> o2.getDateTimestamp().compareTo(o1.getDateTimestamp()));
-
         // make graph
-        boolean isCycle = false;
-        Map<String, Set<String>> graph = new HashMap<>();
+        Map<String, Set<List<String>>> graph = new HashMap<>();
         for (Dependency classDependency : classDependencies) {
             //adding edge
-            Set<String> currentNeighbours = graph.get(classDependency.getFromBean());
+            Set<List<String>> currentNeighbours = graph.get(classDependency.getFromBean());
             if (currentNeighbours == null) {
                 currentNeighbours = new HashSet<>();
             }
-            currentNeighbours.add(classDependency.getToBean());
+
+            //list has the class name+commit hash+time of adding
+            List<String> neighbour = new ArrayList<>(3);
+            neighbour.add(classDependency.getToBean());
+            neighbour.add(classDependency.getCommitHash());
+            neighbour.add(classDependency.getDateTimestamp());
+
+            currentNeighbours.add(neighbour);
+
             graph.put(classDependency.getFromBean(), currentNeighbours);
-            // checking if this edge lead to cycle formation
+        }
+
+
             if (findCycle(graph)) {
-                isCycle = true;
                 System.out.println("cycle is : \n" + cycle + "\n");
-                break;
-            }
-        }
 
-        if(!isCycle) {
+                for(Dependency dependency:dependenciesInCycle){
+                    System.out.println(dependency.toString());
+                }
+
+                // sort dependencies with latest first
+                dependenciesInCycle.sort((o1, o2) -> o2.getDateTimestamp().compareTo(o1.getDateTimestamp()));
+                System.out.println("faulty dependency is : "+dependenciesInCycle.get(0));
+            }
+
+
+        else{
             System.out.println("No cycle found !!!!!!!");
-            return;
         }
+        return;
 
-        // remove edges and check if it removes cycle
-        // TODO: optimize to sort cycle edges and find cycle with latest commit timestamp
-        for (Dependency classDependency : classDependencies) {
-            Set<String> currentNeighbours = graph.get(classDependency.getFromBean());
-            currentNeighbours.remove(classDependency.getToBean());
-            graph.put(classDependency.getFromBean(), currentNeighbours);
-
-            if (!findCycle(graph)) {
-                System.out.println("found cycle due to commit " + classDependency.getCommitHash());
-                System.out.println("the faulty dependency is "
-                        + classDependency.getFromBean() + " to " + classDependency.getToBean());
-                return;
-            }
-        }
     }
 
     private void addDependencyField(String currClassName, String gitBlameMessage, String fieldName) {
@@ -199,10 +199,13 @@ public class GitBlamer {
         }
     }
 
-    public boolean findCycle(Map<String, Set<String>> edges) {
+    public boolean findCycle(Map<String, Set<List<String>>> edges) {
         cycle = "";
+        dependenciesInCycle=new ArrayList<>();
+
         Set<String> visited = new HashSet<>();
         Set<String> recStack = new HashSet<>();
+
         for (String className : edges.keySet()) {
             if (isCyclicUtil(className, visited, recStack, edges)) {
                 return true;
@@ -211,7 +214,9 @@ public class GitBlamer {
         return false;
     }
 
-    public boolean isCyclicUtil(String className, Set<String> visited, Set<String> recStack, Map<String,Set<String>> edges) {
+    public boolean isCyclicUtil(String className, Set<String> visited, Set<String> recStack,
+                                Map<String,Set<List<String>>> edges) {
+
         if (recStack.contains(className)) {
             cycle += "<- ";
             baseElement = className;
@@ -222,16 +227,18 @@ public class GitBlamer {
         }
         recStack.add(className);
         visited.add(className);
-        Set<String> children = edges.get(className);
+        Set<List<String>> children = edges.get(className);
         if (children == null) {
             recStack.remove(className);
             return false;
         }
-        for (String child : children) {
-            if (isCyclicUtil(child, visited, recStack, edges)) {
+        for (List<String> child : children) {
+            String childName= child.get(0);
+            if (isCyclicUtil(childName, visited, recStack, edges)) {
                 if (!baseElement.equals("")) {
-                    cycle += child;
+                    cycle += childName;
                     cycle += " <- ";
+                    dependenciesInCycle.add(new Dependency(className,childName,child.get(1),child.get(2)));
                 } else if (child.equals(baseElement)) {
                     baseElement = "";
                 }
